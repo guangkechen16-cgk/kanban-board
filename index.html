@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务看板</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.card{cursor:grab;transition:.2s}.card:active{cursor:grabbing}.card.dragging{opacity:.5}
+.column.drag-over{background:#e0e7ff;border-color:#6366f1}
+.p-high{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.p-medium{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.p-low{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.mbox{background:#fff;border-radius:12px;padding:24px;width:90%;max-width:400px}
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 md:p-6">
+<header class="mb-6 flex items-center justify-between flex-wrap gap-3">
+<div><h1 class="text-xl md:text-2xl font-bold text-gray-900">任务看板</h1><p class="text-sm text-gray-500 mt-1">实时同步 · <span id="lu"></span></p></div>
+<button onclick="openAdd()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">+ 新建任务</button>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="column rounded-xl border-2 bg-slate-100 border-slate-200 p-3 min-h-[300px]" data-status="todo" ondragover="ad(event)" ondrop="dp(event)" ondragleave="lv(event)">
+<div class="flex items-center justify-between mb-3"><h2 class="font-semibold text-gray-800 text-sm">待办 (To Do)</h2><span class="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 border ct">0</span></div><div class="space-y-2" id="lt"></div></div>
+<div class="column rounded-xl border-2 bg-blue-50 border-blue-200 p-3 min-h-[300px]" data-status="in-progress" ondragover="ad(event)" ondrop="dp(event)" ondragleave="lv(event)">
+<div class="flex items-center justify-between mb-3"><h2 class="font-semibold text-gray-800 text-sm">进行中 (In Progress)</h2><span class="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 border ct">0</span></div><div class="space-y-2" id="lip"></div></div>
+<div class="column rounded-xl border-2 bg-emerald-50 border-emerald-200 p-3 min-h-[300px]" data-status="done" ondragover="ad(event)" ondrop="dp(event)" ondragleave="lv(event)">
+<div class="flex items-center justify-between mb-3"><h2 class="font-semibold text-gray-800 text-sm">已完成 (Done)</h2><span class="px-2 py-0.5 bg-white rounded-full text-xs font-medium text-gray-600 border ct">0</span></div><div class="space-y-2" id="ld"></div></div>
+</div>
+<div class="modal" id="am"><div class="mbox"><h3 class="text-lg font-bold mb-4">新建任务</h3><div class="space-y-3"><div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="at" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="任务标题"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><textarea id="ad" class="w-full px-3 py-2 border rounded-lg text-sm resize-none h-16" placeholder="描述（可选）"></textarea></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-gray-700 mb-1">优先级</label><select id="ap" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option></select></div><div><label class="block text-sm font-medium text-gray-700 mb-1">负责人</label><input id="aa" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="负责人"></div></div></div><div class="flex gap-3 mt-5"><button onclick="addT()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">创建</button><button onclick="closeAdd()" class="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">取消</button></div></div></div>
+<div class="modal" id="em"><div class="mbox"><h3 class="text-lg font-bold mb-4">编辑任务</h3><input type="hidden" id="eid"><div class="space-y-3"><div><label class="block text-sm font-medium text-gray-700 mb-1">标题</label><input id="et" class="w-full px-3 py-2 border rounded-lg text-sm"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">描述</label><textarea id="ed" class="w-full px-3 py-2 border rounded-lg text-sm resize-none h-16"></textarea></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-gray-700 mb-1">优先级</label><select id="ep" class="w-full px-3 py-2 border rounded-lg text-sm"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></div><div><label class="block text-sm font-medium text-gray-700 mb-1">负责人</label><input id="ea" class="w-full px-3 py-2 border rounded-lg text-sm"></div></div></div><div class="flex gap-3 mt-5"><button onclick="saveE()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">保存</button><button onclick="closeE()" class="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">取消</button></div></div></div>
+<script>
+const SK='kb_tasks';
+let ts=[];
+const defs=[
+{id:'t1',title:'客户跟进每日提醒',desc:'每天早上6:00推送今日需跟进客户',st:'done',pr:'high',as:'AI助手'},
+{id:'t2',title:'客户跟进遗漏检查',desc:'每周五16:00检查超7天未跟进客户',st:'done',pr:'high',as:'AI助手'},
+{id:'t3',title:'案例复盘表字段改造',desc:'新增客户编号/评级/标签等字段',st:'done',pr:'high',as:'AI助手'},
+{id:'t4',title:'编写客户跟进Skill',desc:'定义六维梳理框架和操作流程',st:'done',pr:'medium',as:'AI助手'},
+{id:'t5',title:'同步同事操作流程',desc:'创建飞书文档发王宇航/胡进燕',st:'done',pr:'medium',as:'AI助手'},
+{id:'t6',title:'王宇航晨间任务提醒',desc:'工作日9:00检查话术数据(报错排查中)',st:'in-progress',pr:'high',as:'AI助手'},
+{id:'t7',title:'彭川合作风险监控',desc:'监控37万外包合同交付风险',st:'in-progress',pr:'high',as:'AI助手'},
+{id:'t8',title:'苏枭投放数据分析',desc:'每日分析获客成本/线索/素材',st:'in-progress',pr:'high',as:'AI助手'},
+{id:'t9',title:'胡进燕客户分析推送',desc:'分析聊天记录CSV生成画像',st:'todo',pr:'high',as:'AI助手'},
+{id:'t10',title:'SiteHub流程图细化',desc:'根据4/9会议纪要细化里程碑',st:'todo',pr:'medium',as:'AI助手'}
+];
+function ld(){let s=localStorage.getItem(SK);if(s){ts=JSON.parse(s)}else{ts=[...defs];sv()}rn()}
+function sv(){localStorage.setItem(SK,JSON.stringify(ts));document.getElementById('lu').textContent='上次更新 '+new Date().toLocaleTimeString('zh-CN')}
+function rn(){['todo','in-progress','done'].forEach(s=>{let d=document.getElementById(s=='todo'?'lt':s=='in-progress'?'lip':'ld');d.innerHTML='';let f=ts.filter(t=>t.st==s);document.querySelector(`[data-status="${s}"] .ct`).textContent=f.length;f.forEach(t=>{let e=document.createElement('div');e.className='card bg-white rounded-lg p-3 shadow-sm border border-gray-200 hover:shadow-md';e.draggable=true;e.dataset.id=t.id;let p={low:'低',medium:'中',high:'高'}[t.pr],c='p-'+t.pr;e.innerHTML=`<div class="flex items-start justify-between mb-1"><span class="text-xs px-2 py-0.5 rounded-full font-medium ${c}">${p}优先级</span><div class="flex gap-1"><button onclick="openE('${t.id}')" class="text-gray-400 hover:text-indigo-600 text-xs px-1">编辑</button><button onclick="del('${t.id}')" class="text-gray-400 hover:text-red-500 text-xs px-1">删除</button></div></div><h3 class="font-medium text-gray-900 text-sm mb-0.5">${esc(t.title)}</h3>${t.desc?`<p class="text-xs text-gray-500 line-clamp-2">${esc(t.desc)}</p>`:''}${t.as?`<div class="flex items-center gap-1.5 mt-2"><div class="w-4 h-4 rounded-full bg-indigo-100 text-indigo-700 text-[10px] flex items-center justify-center font-medium">${esc(t.as.slice(0,1))}</div><span class="text-xs text-gray-500">${esc(t.as)}</span></div>`:''}`;e.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text',t.id);e.classList.add('dragging')});e.addEventListener('dragend',()=>e.classList.remove('dragging'));d.appendChild(e)});if(f.length==0)d.innerHTML='<div class="text-center py-6 text-gray-400 text-xs">暂无任务<br>拖拽任务到此处</div>'})}
+function esc(t){let d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function ad(e){e.preventDefault();e.currentTarget.classList.add('drag-over')}
+function lv(e){e.currentTarget.classList.remove('drag-over')}
+function dp(e){e.preventDefault();e.currentTarget.classList.remove('drag-over');let id=e.dataTransfer.getData('text'),st=e.currentTarget.dataset.status,t=ts.find(x=>x.id==id);if(t&&t.st!=st){t.st=st;t.ut=new Date().toISOString();sv();rn()}}
+function openAdd(){document.getElementById('am').classList.add('show')}
+function closeAdd(){document.getElementById('am').classList.remove('show')}
+function addT(){let t=document.getElementById('at').value.trim();if(!t)return;ts.push({id:'t'+Date.now(),title:t,desc:document.getElementById('ad').value,st:'todo',pr:document.getElementById('ap').value,as:document.getElementById('aa').value,ct:new Date().toISOString(),ut:new Date().toISOString()});sv();rn();document.getElementById('at').value='';document.getElementById('ad').value='';document.getElementById('aa').value='';closeAdd()}
+function openE(id){let t=ts.find(x=>x.id==id);if(!t)return;document.getElementById('eid').value=id;document.getElementById('et').value=t.title;document.getElementById('ed').value=t.desc;document.getElementById('ep').value=t.pr;document.getElementById('ea').value=t.as;document.getElementById('em').classList.add('show')}
+function closeE(){document.getElementById('em').classList.remove('show')}
+function saveE(){let id=document.getElementById('eid').value,t=ts.find(x=>x.id==id);if(!t)return;t.title=document.getElementById('et').value;t.desc=document.getElementById('ed').value;t.pr=document.getElementById('ep').value;t.as=document.getElementById('ea').value;t.ut=new Date().toISOString();sv();rn();closeE()}
+function del(id){if(!confirm('确定删除？'))return;ts=ts.filter(t=>t.id!=id);sv();rn()}
+ld();
+</script>
+</body>
+</html>
